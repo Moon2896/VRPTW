@@ -22,71 +22,91 @@ class Ant:
         self.rho = self.graph.rho
 
     def routeConstruction(self):
-        nodesAvailable, nodesIndexAvailable, node2Col = self.initializeNodes()
+        nodesAvailable, nodesIndexAvailable, node2Col, col2Node = self.initializeNodes()
 
         P = self.P.copy()
 
         for tI, tLoad in enumerate(self.vehicleLoads):
-            currentNode = nodesIndexAvailable.index(self.startNode)
+            currentNode = self.graph.nodes[0]
             toVisit, toVisitIndex = nodesAvailable.copy(), nodesIndexAvailable.copy()
 
-            while tLoad < self.graph.capacity or len(toVisit) == 0:
+            while tLoad < self.graph.capacity or len(toVisit) != 0:
                 currentNodeIndex = node2Col[currentNode]
                 self.printCurrentNodeInfo(currentNode, currentNodeIndex)
 
                 nextNodeIndex = self.chooseNextNodeIndex(currentNodeIndex, toVisitIndex, P)
-                nextNodeIndexInList = toVisitIndex.index(nextNodeIndex)
-                nextNode, nextNodeDemand = toVisit[nextNodeIndexInList], nextNodeIndex.demand
+                nextNode = col2Node[nextNodeIndex]
+                nextNodeDemand = nextNode.demand
 
                 if self.isDemandSatisfied(nextNodeDemand, tLoad):
-                    self.handleSatisfiedDemand(tI, node2Col, nextNodeDemand, currentNode, tLoad, P, toVisitIndex, toVisit, nextNodeIndex)
+                    P, currentNode, currentNodeIndex, tLoad, toVisit, toVisitIndex = self.handleSatisfiedDemand(tI, currentNodeIndex, node2Col,col2Node, nextNode, nextNodeDemand, currentNode, tLoad, P, toVisitIndex, toVisit, nextNodeIndex)
                 else:
                     self.handleUnsatisfiedDemand(toVisitIndex, toVisit, nextNodeIndex)
 
         return 0
 
     def initializeNodes(self):
-        nodesAvailable = self.graph.nodes.copy()
+        nodesAvailable = self.graph.nodes
         nodesIndexAvailable = [i for i in range(self.graph.nodeNumber)]
-        node2Col = {node_idx: col_idx for col_idx, node_idx in enumerate(nodesIndexAvailable)}
-        return nodesAvailable, nodesIndexAvailable, node2Col
+        node2Col = {node: col_idx for col_idx, node in enumerate(nodesAvailable)}
+        col2Node = {v:k for k, v in node2Col.items()}
+        
+        # print(node2Col)
+        return nodesAvailable, nodesIndexAvailable, node2Col, col2Node
 
     def printCurrentNodeInfo(self, currentNode, currentNodeIndex):
         print("currentNode:", currentNode)
         print("currentNodeIndex:", currentNodeIndex)
 
     def chooseNextNodeIndex(self, currentNodeIndex, toVisitIndex, P):
-        print(toVisitIndex)
-        print(currentNodeIndex)
+        print("toVisitIndex:",toVisitIndex)
+        # print("currentNodeIndex:",currentNodeIndex)
+        print("P:",P[currentNodeIndex].shape)
         nextNodeIndex = np.random.choice(
             a=toVisitIndex,
             p=P[currentNodeIndex] / np.sum(P[currentNodeIndex])
         )
-        return toVisitIndex.index(nextNodeIndex)
+        return nextNodeIndex
 
     def isDemandSatisfied(self, nextNodeDemand, tLoad):
         return nextNodeDemand + tLoad < self.graph.capacity
 
-    def handleSatisfiedDemand(self, tI, node2Col, nextNodeDemand, currentNode, tLoad, P, toVisitIndex, toVisit, nextNodeIndex):
-        del node2Col[currentNode]
+    def handleSatisfiedDemand(self, tI, currentNodeIndex, node2Col, col2Node, nextNode, nextNodeDemand, currentNode, tLoad, P, toVisitIndex, toVisit, nextNodeIndex):
+        # Add the path to routes[tI][currentNode][nextNode]
+        # remove inf that we don't need anymore
+
         tLoad += nextNodeDemand
-
-        currentNodeIndex = node2Col[currentNode]
+        print("P.shape before:",P.shape)
+        print("removing column:",currentNodeIndex)
         P = np.delete(P, currentNodeIndex, axis=1)
+        print("P.shape after:",P.shape)
 
-        nextNodeIndexInList = toVisitIndex.index(nextNodeIndex)
-        toVisitIndex.pop(nextNodeIndexInList)
-        toVisit.pop(nextNodeIndexInList)
+        tv = []
+        for node in toVisit:
+            if node != nextNode:
+                tv.append(node)
+        toVisit = tv
+        
+        tvi = []
+        for nodeI in toVisitIndex:
+            if nodeI != nextNodeIndex:
+                tvi.append(nodeI)
+        toVisitIndex = tvi
+        # P = np.delete(P, nextNodeIndex, axis=1)
 
+        currentNode = col2Node[nextNodeIndex]
+        currentNodeIndex = nextNodeIndex
+        
         self.routes[tI][currentNodeIndex][nextNodeIndex] = 1
-        currentNode = nextNodeIndex  # Fix: Use nextNodeIndex instead of nextNode
         print(f"Switch to new node {nextNodeIndex}" + '\n')
+
+        return P, currentNode, currentNodeIndex, tLoad, toVisit, toVisitIndex
 
     def handleUnsatisfiedDemand(self, toVisitIndex, toVisit, nextNodeIndex):
         nextNodeIndexInList = toVisitIndex.index(nextNodeIndex)
         toVisitIndex.pop(nextNodeIndexInList)
         toVisit.pop(nextNodeIndexInList)
-        print('Trying another node' + '\n')
+        print('Trying another node ############################################' + '\n')
     
     def computeDeltaPheromons(self):
         dPh = np.zeros_like(self.P)

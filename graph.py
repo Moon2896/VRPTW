@@ -19,6 +19,16 @@ class Node:
         self.serviceTime = serviceTime
         self.startNode = self.demand == 0
 
+    def __eq__(self, __value: object) -> bool:
+        return __value.x == self.x \
+        and __value.y == self.y \
+        and __value.demand == self.demand \
+        and __value.readyTime == self.readyTime
+    
+    def __hash__(self) -> int:
+        return hash(f"{self.x}:{self.y}")
+
+
 class Graph:
 
     def __init__(self, filePath:str, maxGraphSize:int) -> None:
