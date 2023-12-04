@@ -8,11 +8,13 @@ class Solution:
             self,
             filePath:str,
             populationSize:int,
-            maxIteration:int):
+            maxIteration:int,
+            maxGraphSize:int):
 
-        self.graph = Graph(filePath)
+        self.graph = Graph(filePath, maxGraphSize)
         self.populationSize = populationSize
         self.maxIteration = maxIteration
+        self.maxGraphSize = maxGraphSize
         self.ants = [Ant(graph=self.graph) for _ in range(populationSize)]
         self.scores = [ant.score for ant in self.ants]
         self.bestScore = np.inf

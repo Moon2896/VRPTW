@@ -22,49 +22,84 @@ class Ant:
         self.rho = self.graph.rho
 
     def routeConstruction(self):
-        # left over nodes
-        nodesAvailable = [i for i in range(self.graph.nodeNumber)]
-        # tI is the i-th truck, tLoad refoers to its load
-        for tI, _ in enumerate(self.vehicleLoads):
-            # iterate trough its path (0->...->0)
-            # memory wise inefficient
-            currentNode = self.startNode
-            # let the current node not be choosable
-            nodesAvailable.pop(np.argmax([currentNode==node for node in self.graph.nodes]))
-            print(f"Truck {tI}")
+        nodesAvailable, nodesIndexAvailable, node2Col = self.initializeNodes()
 
-            for nodeIndex in [np.argmax([currentNode==node for node in self.graph.nodes]) in range(self.graph.nodeNumber)]:
-                # get the current nodeIndex and check if capacity is ok
-                if self.vehicleLoads[tI]+self.graph.nodes[nodeIndex].demand > self.graph.capacity:
-                    # choose the next one
-                    nextNode = np.random.choice(
-                        a = nodesAvailable,
-                        p = self.P[tI][nodeIndex] 
-                    )
-                    # add the currentNode demand
-                    self.vehicleLoads[tI] += self.graph.nodes[nodeIndex].demand
-                    # write the path
-                    self.routes[tI][currentNode][nextNode] = 1
-                    # change to the next node
-                    currentNode = nextNode
-                    print(f"Going to: {nodeIndex}")
+        P = self.P.copy()
 
-            # ugly code
-            self.routes[tI][currentNode][np.argmax([currentNode==node for node in self.graph.nodes])]
+        for tI, tLoad in enumerate(self.vehicleLoads):
+            currentNode = nodesIndexAvailable.index(self.startNode)
+            toVisit, toVisitIndex = nodesAvailable.copy(), nodesIndexAvailable.copy()
+
+            while tLoad < self.graph.capacity or len(toVisit) == 0:
+                currentNodeIndex = node2Col[currentNode]
+                self.printCurrentNodeInfo(currentNode, currentNodeIndex)
+
+                nextNodeIndex = self.chooseNextNodeIndex(currentNodeIndex, toVisitIndex, P)
+                nextNodeIndexInList = toVisitIndex.index(nextNodeIndex)
+                nextNode, nextNodeDemand = toVisit[nextNodeIndexInList], nextNodeIndex.demand
+
+                if self.isDemandSatisfied(nextNodeDemand, tLoad):
+                    self.handleSatisfiedDemand(tI, node2Col, nextNodeDemand, currentNode, tLoad, P, toVisitIndex, toVisit, nextNodeIndex)
+                else:
+                    self.handleUnsatisfiedDemand(toVisitIndex, toVisit, nextNodeIndex)
 
         return 0
+
+    def initializeNodes(self):
+        nodesAvailable = self.graph.nodes.copy()
+        nodesIndexAvailable = [i for i in range(self.graph.nodeNumber)]
+        node2Col = {node_idx: col_idx for col_idx, node_idx in enumerate(nodesIndexAvailable)}
+        return nodesAvailable, nodesIndexAvailable, node2Col
+
+    def printCurrentNodeInfo(self, currentNode, currentNodeIndex):
+        print("currentNode:", currentNode)
+        print("currentNodeIndex:", currentNodeIndex)
+
+    def chooseNextNodeIndex(self, currentNodeIndex, toVisitIndex, P):
+        print(toVisitIndex)
+        print(currentNodeIndex)
+        nextNodeIndex = np.random.choice(
+            a=toVisitIndex,
+            p=P[currentNodeIndex] / np.sum(P[currentNodeIndex])
+        )
+        return toVisitIndex.index(nextNodeIndex)
+
+    def isDemandSatisfied(self, nextNodeDemand, tLoad):
+        return nextNodeDemand + tLoad < self.graph.capacity
+
+    def handleSatisfiedDemand(self, tI, node2Col, nextNodeDemand, currentNode, tLoad, P, toVisitIndex, toVisit, nextNodeIndex):
+        del node2Col[currentNode]
+        tLoad += nextNodeDemand
+
+        currentNodeIndex = node2Col[currentNode]
+        P = np.delete(P, currentNodeIndex, axis=1)
+
+        nextNodeIndexInList = toVisitIndex.index(nextNodeIndex)
+        toVisitIndex.pop(nextNodeIndexInList)
+        toVisit.pop(nextNodeIndexInList)
+
+        self.routes[tI][currentNodeIndex][nextNodeIndex] = 1
+        currentNode = nextNodeIndex  # Fix: Use nextNodeIndex instead of nextNode
+        print(f"Switch to new node {nextNodeIndex}" + '\n')
+
+    def handleUnsatisfiedDemand(self, toVisitIndex, toVisit, nextNodeIndex):
+        nextNodeIndexInList = toVisitIndex.index(nextNodeIndex)
+        toVisitIndex.pop(nextNodeIndexInList)
+        toVisit.pop(nextNodeIndexInList)
+        print('Trying another node' + '\n')
     
     def computeDeltaPheromons(self):
-        dP = np.zeros_like(self.P)
+        dPh = np.zeros_like(self.P)
         for route in self.routes:
-            dP += np.multiply(route, self.graph.pheromonsMatrix)
-        dP *= self.rho
-        return dP
+            dPh += np.multiply(route, self.graph.pheromonsMatrix)
+        dPh *= self.rho
+        return dPh
     
     def computePheromons(self):
-        dP = self.computeDeltaPheromons()
-        self.graph.pheromonsMatrix = (1-self.graph.rho)*self.graph.pheromonsMatrix + self.graph.rho*dP
-        print(np.sum(dP))
+        dPh = self.computeDeltaPheromons()
+        self.graph.pheromonsMatrix = (1-self.graph.rho)*self.graph.pheromonsMatrix + self.graph.rho*dPh
+        self.P = self.graph.computeProbabilityMatrix()
+        print(f"dPh={np.sum(dPh)}")
     
     def update(self):
         # the order does not really matter has it is a +/-1 from the real sol.

@@ -21,10 +21,11 @@ class Node:
 
 class Graph:
 
-    def __init__(self, filePath:str) -> None:
+    def __init__(self, filePath:str, maxGraphSize:int) -> None:
+        self.maxGraphSize = maxGraphSize
         # load nodes and params from the files
         self.vehicleNumber, self.capacity, self.nodes \
-            = self.fromFile(filePath) 
+            = self.fromFile(filePath, maxGraphSize) 
         
         self.startNode = self.getStartNode(self.nodes)
         
@@ -43,7 +44,7 @@ class Graph:
 
         # get the time-heuristic
         self.timeMatrix = self.computeTimeMatrix(self.nodes)
-        print(self.timeMatrix)
+        # print(self.timeMatrix)
 
         # initialize alpha  : weight of the pheromone
         # initialize beta   : weight of the heuristic
@@ -55,9 +56,10 @@ class Graph:
         self.probabilityMatrix = self.computeProbabilityMatrix()
 
     
-    def fromFile(self, filePath:str):
+    def fromFile(self, filePath:str, maxGraphSize:int):
         # nodes will be stored in a list
         nodes = []
+        count = 0
         with open(filePath) as file:
             for i, line in enumerate(file):
                 # header of the document
@@ -71,6 +73,8 @@ class Graph:
                 
                 # info about each node
                 elif i > 10:
+                    if count > self.maxGraphSize:
+                        break
                     nodeParameters = [float(x) for x in line.split()]
                     newNode = Node(
                         x=nodeParameters[1],
@@ -81,6 +85,7 @@ class Graph:
                         serviceTime=nodeParameters[6],
                     )
                     nodes.append(newNode)
+                    count += 1
         return vehicleNumber, capacity, nodes
     
     def computeDistanceMatrix(self, nodes:Node):
@@ -114,12 +119,15 @@ class Graph:
         P = np.ones((self.nodeNumber,self.nodeNumber))
         for i in range(self.nodeNumber):
             for j in range(self.nodeNumber):
-                P[i][j] *= ( 1/(self.distanceMatrix[i][j]**self.beta+1) \
-                        + self.pheromonsMatrix[i][j]**self.alpha \
-                        + self.timeMatrix[i][j]**self.gamma )
+                if i != j:
+                    P[i][j] *= ( 1/(self.distanceMatrix[i][j]**self.beta+1) \
+                            + self.pheromonsMatrix[i][j]**self.alpha \
+                            + self.timeMatrix[i][j]**self.gamma )
+                else: 
+                    P[i][j] = 0
             # normalize the columns
             P[i] *= 1/(np.sum(P[i])+1)
-        print(P)
+        # print(P)
         return P
 
     def getStartNode(self, nodes:list[Node]):
